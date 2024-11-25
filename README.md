@@ -1,4 +1,4 @@
-# Rumo App Dev
+# Rumo App Development
 
 This extension is needed for programming apps in TypeScript. It will upload the compiled JavaScript to the remote server via SFTP.
 
@@ -15,4 +15,8 @@ This extension is needed for programming apps in TypeScript. It will upload the 
 ## Configuration
 
 This extension requires the SFTP extension. The configuration from the SFTP extension will be used.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE.txt](LICENSE.txt) file for details.
 
