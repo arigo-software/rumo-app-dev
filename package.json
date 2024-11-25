@@ -1,0 +1,67 @@
+{
+  "name": "rumo-app-dev",
+  "displayName": "Rumo App Dev",
+  "description": "This extension is needed for programming apps in TypeScript. It will upload the compiled JavaScript to the remote server via SFTP.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "rumo-app-dev.uploadAllFiles",
+        "title": "RumoAppDev:Upload All JavaScript Files"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "rumo-app-dev.uploadAllFiles",
+          "when": "editorTextFocus"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "rumo-app-dev.uploadAllFiles",
+          "group": "navigation",
+          "when": "resourceExtname == .ts",
+          "icon": {
+            "light": "./resources/light/132316_exit_icon.png",
+            "dark": "./resources/dark/132316_exit_icon.png"
+          }
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.9",
+    "@types/node": "20.x",
+    "@types/ssh2-sftp-client": "^9.0.4",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.10.0",
+    "@typescript-eslint/parser": "^8.7.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "ssh2-sftp-client": "^11.0.0"
+  }
+}
