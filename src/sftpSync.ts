@@ -38,6 +38,8 @@ export class SftpSync {
 					remoteRoot: sftpConfig.remotePath
 				};
 			}
+		} else {
+			this.config = undefined;
 		}
 	}
 
@@ -58,9 +60,7 @@ export class SftpSync {
 				throw err;
 			}
 		} else {
-			const error = new Error('SFTP configuration not found');
-			vscode.window.showErrorMessage(error.message);
-			throw error;
+			this.connected = false;
 		}
 	}
 
@@ -82,6 +82,24 @@ export class SftpSync {
 		}
 	}
 
+	private async handleSftpError(err: Error) {
+		if (err.message.includes('No such file') || err.message.includes('Connection lost')) {
+			this.connected = false;
+			await this.reconnect();
+		}
+	}
+
+	public async reconnect(): Promise<void> {
+		if (this.config) {
+			try {
+				await this.connect();
+				vscode.window.showInformationMessage('SFTP reconnected successfully');
+			} catch (err) {
+				vscode.window.showErrorMessage(`SFTP reconnection error: ${(err as Error).message}`);
+			}
+		}
+	}
+
 	public async uploadFile(localPath: string) {
 		if (this.config) {
 			const relativePath = path.relative(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, BUILD_TYPE_DIR), localPath);
@@ -91,6 +109,7 @@ export class SftpSync {
 				await this.sftp.put(localPath, remotePath);
 				vscode.window.showInformationMessage(`File uploaded to: ${remotePath}`);
 			} catch (err) {
+				await this.handleSftpError(err as Error);
 				const errorMessage = (err as Error).message;
 				vscode.window.showErrorMessage(`File upload error: ${errorMessage}`);
 			}
@@ -100,24 +119,24 @@ export class SftpSync {
 	public async uploadAllFiles() {
 		if (this.config) {
 			const buildTypeDir = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, BUILD_TYPE_DIR);
-			const files = this.getAllFiles(buildTypeDir, '.js');
+			const files = this.getAllFiles(buildTypeDir, ['.js', '.js.map']);
 			for (const file of files) {
 				const relativePath = path.relative(buildTypeDir, file);
 				const remotePath = path.join(this.config.remoteRoot, relativePath);
 				await this.ensureRemoteDirectory(remotePath);
 				await this.uploadFile(file);
 			}
-			vscode.window.showInformationMessage('All JavaScript files uploaded');
+			vscode.window.showInformationMessage('All JavaScript and map files uploaded');
 		}
 	}
 
-	private getAllFiles(dir: string, ext: string, files: string[] = [], result: string[] = []): string[] {
+	private getAllFiles(dir: string, exts: string[], files: string[] = [], result: string[] = []): string[] {
 		files = fs.readdirSync(dir);
 		for (const file of files) {
 			const filePath = path.join(dir, file);
 			if (fs.statSync(filePath).isDirectory()) {
-				this.getAllFiles(filePath, ext, fs.readdirSync(filePath), result);
-			} else if (filePath.endsWith(ext)) {
+				this.getAllFiles(filePath, exts, fs.readdirSync(filePath), result);
+			} else if (exts.some(ext => filePath.endsWith(ext))) {
 				result.push(filePath);
 			}
 		}
@@ -132,6 +151,7 @@ export class SftpSync {
 				await this.sftp.delete(remotePath);
 				vscode.window.showInformationMessage(`File deleted: ${remotePath}`);
 			} catch (err) {
+				await this.handleSftpError(err as Error);
 				const errorMessage = (err as Error).message;
 				vscode.window.showErrorMessage(`File delete error: ${errorMessage}`);
 			}

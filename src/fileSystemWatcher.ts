@@ -16,13 +16,14 @@ export class FileSystemWatcher {
 	}
 
 	private async initialize() {
+		this.watchConfigFile();
 		try {
 			await this.sftpSync.connect();
-			this.createWatcher();
-			this.watchConfigFile();
+			if (this.sftpSync.isConnected()) {
+				this.createWatcher();
+			}
 		} catch (err) {
 			vscode.window.showErrorMessage('Initial SFTP connection failed. Will retry on configuration change.');
-			this.watchConfigFile();
 		}
 	}
 
@@ -37,7 +38,7 @@ export class FileSystemWatcher {
 		// Manually check for file changes recursively
 		const watchOptions = { recursive: true };
 		const watcher = fs.watch(buildTypeDir, watchOptions, (eventType, filename) => {
-			if (filename && filename.endsWith('.js')) {
+			if (filename && (filename.endsWith('.js') || filename.endsWith('.js.map'))) {
 				const filePath = path.join(buildTypeDir, filename);
 				if (eventType === 'change') {
 					this.onFileChange(vscode.Uri.file(filePath));
@@ -72,7 +73,9 @@ export class FileSystemWatcher {
 		vscode.window.showInformationMessage('SFTP configuration changed, reloading...');
 		this.sftpSync.loadConfig();
 		this.sftpSync.connect().then(() => {
-			this.recreateWatcher();
+			if (this.sftpSync.isConnected()) {
+				this.recreateWatcher();
+			}
 		}).catch(() => {
 			vscode.window.showErrorMessage('SFTP connection failed after configuration change.');
 		});
