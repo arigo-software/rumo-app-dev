@@ -11,7 +11,7 @@
 			"request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"/home/sruetzler/Documents/appDev2"
+				"/home/sruetzler/Documents/appDev2/smarthome"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"

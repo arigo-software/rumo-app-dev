@@ -9,6 +9,7 @@ export class FileSystemWatcher {
 	private configWatcher: vscode.FileSystemWatcher | undefined;
 	private sftpSync: SftpSync;
     private watcher: fs.FSWatcher | undefined;
+	private changeTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
 	constructor() {
 		this.sftpSync = new SftpSync();
@@ -35,23 +36,34 @@ export class FileSystemWatcher {
 			fs.mkdirSync(buildTypeDir, { recursive: true });
 		}
 
-		// Manually check for file changes recursively
+		this.createWatcherForDirectory(buildTypeDir);
+	}
+
+	private createWatcherForDirectory(dirPath: string) {
 		const watchOptions = { recursive: true };
-		const watcher = fs.watch(buildTypeDir, watchOptions, (eventType, filename) => {
-			if (filename && (filename.endsWith('.js') || filename.endsWith('.js.map'))) {
-				const filePath = path.join(buildTypeDir, filename);
-				if (eventType === 'change') {
-					this.onFileChange(vscode.Uri.file(filePath));
-				} else if (eventType === 'rename') {
-					if (fs.existsSync(filePath)) {
-						this.onFileCreate(vscode.Uri.file(filePath));
-					} else {
-						this.onFileDelete(vscode.Uri.file(filePath));
+		fs.watch(dirPath, watchOptions, (eventType, filename) => {
+			if (filename) {
+				const filePath = path.join(dirPath, filename);
+				if (fs.statSync(filePath).isDirectory()) {
+					this.onDirectoryCreate(filePath);
+				} else if (filename.endsWith('.js') || filename.endsWith('.js.map')) {
+					if (eventType === 'change') {
+						this.onFileChange(vscode.Uri.file(filePath));
+					} else if (eventType === 'rename') {
+						if (fs.existsSync(filePath)) {
+							this.onFileCreate(vscode.Uri.file(filePath));
+						} else {
+							this.onFileDelete(vscode.Uri.file(filePath));
+						}
 					}
 				}
 			}
 		});
+	}
 
+	private onDirectoryCreate(dirPath: string) {
+		vscode.window.showInformationMessage(`Directory created: ${dirPath}`);
+		this.createWatcherForDirectory(dirPath);
 	}
 
 	private watchConfigFile() {
@@ -81,20 +93,59 @@ export class FileSystemWatcher {
 		});
 	}
 
-	private onFileChange(uri: vscode.Uri) {
+	private async onFileChange(uri: vscode.Uri) {
 		vscode.window.showInformationMessage(`File changed: ${uri.fsPath}`);
-		this.sftpSync.uploadFile(uri.fsPath);
+		console.log(`Uploading changed file: ${uri.fsPath}`);
+
+		if (this.changeTimeouts.has(uri.fsPath)) {
+			clearTimeout(this.changeTimeouts.get(uri.fsPath)!);
+		}
+
+		this.changeTimeouts.set(uri.fsPath, setTimeout(async () => {
+			try {
+				await this.sftpSync.uploadFile(uri.fsPath);
+			} catch (err) {
+				console.error(err)
+				if (!this.sftpSync.isConnected()) {
+					await this.sftpSync.reconnect();
+					await this.sftpSync.uploadFile(uri.fsPath);
+				} else {
+					vscode.window.showErrorMessage(`Failed to upload file: ${uri.fsPath}`);
+				}
+			}
+			this.changeTimeouts.delete(uri.fsPath);
+		}, 1000));
 	}
 
-	private onFileCreate(uri: vscode.Uri) {
+	private async onFileCreate(uri: vscode.Uri) {
 		vscode.window.showInformationMessage(`File created: ${uri.fsPath}`);
-		this.sftpSync.uploadFile(uri.fsPath);
+		console.log(`Uploading created file: ${uri.fsPath}`);
+		try {
+			await this.sftpSync.uploadFile(uri.fsPath);
+		} catch (err) {
+			if (!this.sftpSync.isConnected()) {
+				await this.sftpSync.reconnect();
+				await this.sftpSync.uploadFile(uri.fsPath);
+			} else {
+				vscode.window.showErrorMessage(`Failed to upload file: ${uri.fsPath}`);
+			}
+		}
 		this.recreateWatcher();
 	}
 
-	private onFileDelete(uri: vscode.Uri) {
+	private async onFileDelete(uri: vscode.Uri) {
 		vscode.window.showInformationMessage(`File deleted: ${uri.fsPath}`);
-		this.sftpSync.deleteFile(uri.fsPath);
+		console.log(`Deleting file: ${uri.fsPath}`);
+		try {
+			await this.sftpSync.deleteFile(uri.fsPath);
+		} catch (err) {
+			if (!this.sftpSync.isConnected()) {
+				await this.sftpSync.reconnect();
+				await this.sftpSync.deleteFile(uri.fsPath);
+			} else {
+				vscode.window.showErrorMessage(`Failed to delete file: ${uri.fsPath}`);
+			}
+		}
 	}
 
 	public async uploadAllFiles() {

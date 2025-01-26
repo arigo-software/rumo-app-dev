@@ -77,8 +77,14 @@ export class SftpSync {
 			}
 		} catch (err) {
 			const errorMessage = (err as Error).message;
-			vscode.window.showErrorMessage(`Error creating remote directory: ${errorMessage}`);
-			throw err;
+			console.error(err);
+			if (errorMessage.includes('No SFTP connection available')) {
+				await this.reconnect();
+				await this.ensureRemoteDirectory(remotePath);
+			} else {
+				vscode.window.showErrorMessage(`Error creating remote directory: ${errorMessage}`);
+				throw err;
+			}
 		}
 	}
 
